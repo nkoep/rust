@@ -763,7 +763,7 @@ fn with_envp<T>(env: Option<&[(CString, CString)]>, cb: |*mut c_void| -> T) -> T
                 let kv = format!("{}={}",
                                  pair.ref0().as_str().unwrap(),
                                  pair.ref1().as_str().unwrap());
-                blk.push_all(kv.to_utf16().as_slice());
+                blk.extend(kv.utf16_iter());
                 blk.push(0);
             }
 

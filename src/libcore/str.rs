@@ -16,6 +16,7 @@
 
 use mem;
 use char;
+use char::Char;
 use clone::Clone;
 use cmp;
 use cmp::{PartialEq, Eq};
@@ -551,6 +552,40 @@ impl<'a> Iterator<&'a str> for StrSplits<'a> {
                 Some(self.it.haystack.slice(self.last_end, self.it.haystack.len()))
             }
         }
+    }
+}
+
+/// External iterator for a string's UTF16 codeunits.
+/// Use with the `std::iter` module.
+#[deriving(Clone)]
+pub struct Utf16CodeUnits<'a> {
+    chars: Chars<'a>,
+    extra: u16
+}
+
+impl<'a> Iterator<u16> for Utf16CodeUnits<'a> {
+    #[inline]
+    fn next(&mut self) -> Option<u16> {
+        if self.extra != 0 {
+            let tmp = self.extra;
+            self.extra = 0;
+            return Some(tmp);
+        }
+
+        let mut buf = [0u16, ..2];
+        self.chars.next().map(|ch| {
+            let n = ch.encode_utf16(buf /* as mut slice! */);
+            if n == 2 { self.extra = buf[1]; }
+            buf[0]
+        })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (uint, Option<uint>) {
+        let (low, high) = self.chars.size_hint();
+        // we could be entirely valid surrogates (2 elements per
+        // char), or entirely non-surrogates (1 element per char)
+        (low / 2, high)
     }
 }
 
@@ -1612,6 +1647,9 @@ pub trait StrSlice<'a> {
     /// and that it is not reallocated (e.g. by pushing to the
     /// string).
     fn as_ptr(&self) -> *u8;
+
+    /// Return an iterator of `u16` over the string encoded as UTF-16.
+    fn utf16_iter(&self) -> Utf16CodeUnits<'a>;
 }
 
 impl<'a> StrSlice<'a> for &'a str {
@@ -1959,6 +1997,11 @@ impl<'a> StrSlice<'a> for &'a str {
     #[inline]
     fn as_ptr(&self) -> *u8 {
         self.repr().data
+    }
+
+    #[inline]
+    fn utf16_iter(&self) -> Utf16CodeUnits<'a> {
+        Utf16CodeUnits{ chars: self.chars(), extra: 0}
     }
 }
 
